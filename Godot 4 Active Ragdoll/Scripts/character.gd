@@ -44,7 +44,7 @@ var grabbing_arm_right = false
 @onready var l_grab_area = $"Physical/Armature/Skeleton3D/Physical Bone LArm2/LGrabArea"
 @onready var r_grab_area = $"Physical/Armature/Skeleton3D/Physical Bone RArm2/RGrabArea"
 
-
+var current_delta:float
 
 func _ready():
 	physical_skel.physical_bones_start_simulation()# activate ragdoll
@@ -76,7 +76,9 @@ func _process(delta):
 	else:
 		animation_tree.set("parameters/grab_dir/blend_position",0)
 
+
 func _physics_process(delta):
+	current_delta = delta
 	if not ragdoll_mode:# if not in ragdoll mode
 		
 		# walking control
@@ -127,19 +129,6 @@ func _physics_process(delta):
 
 		#rotate the character toward the camera direction
 		animated_skel.rotation.y = camera_pivot.rotation.y
-		
-		# rotate the physical bones toward the animated bones rotations using hookes law
-		for b:PhysicalBone3D in physics_bones:
-			if not active_arm_left and b.name.contains("LArm"): continue # only rotated the arms if its activated
-			if not active_arm_right and b.name.contains("RArm"): continue # only rotated the arms if its activated
-			var target_transform: Transform3D = animated_skel.global_transform * animated_skel.get_bone_global_pose(b.get_bone_id())
-			var current_transform: Transform3D = physical_skel.global_transform * physical_skel.get_bone_global_pose(b.get_bone_id())
-			var rotation_difference: Basis = (target_transform.basis * current_transform.basis.inverse())
-			var torque = hookes_law(rotation_difference.get_euler(), b.angular_velocity, angular_spring_stiffness, angular_spring_damping)
-			torque = torque.limit_length(max_angular_force)
-			
-			b.angular_velocity += torque * delta
-			
 # spring related function
 func hookes_law(displacement: Vector3, current_velocity: Vector3, stiffness: float, damping: float) -> Vector3:
 	return (stiffness * displacement) - (damping * current_velocity)
@@ -170,3 +159,19 @@ func _on_l_grab_area_body_entered(body:Node3D):
 func _on_jump_timer_timeout():
 	# jump timer to avoid spamming jump and then fly away
 	can_jump = true
+
+
+func _on_skeleton_3d_skeleton_updated() -> void:
+	if not ragdoll_mode:# if not in ragdoll mode
+		# rotate the physical bones toward the animated bones rotations using hookes law
+		for b:PhysicalBone3D in physics_bones:
+			if not active_arm_left and b.name.contains("LArm"): continue # only rotated the arms if its activated
+			if not active_arm_right and b.name.contains("RArm"): continue # only rotated the arms if its activated
+			var target_transform: Transform3D = animated_skel.global_transform * animated_skel.get_bone_global_pose(b.get_bone_id())
+			var current_transform: Transform3D = physical_skel.global_transform * physical_skel.get_bone_global_pose(b.get_bone_id())
+			var rotation_difference: Basis = (target_transform.basis * current_transform.basis.inverse())
+			var torque = hookes_law(rotation_difference.get_euler(), b.angular_velocity, angular_spring_stiffness, angular_spring_damping)
+			torque = torque.limit_length(max_angular_force)
+			
+			b.angular_velocity += torque * current_delta
+			
